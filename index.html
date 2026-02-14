@@ -3,164 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Diario Visual</title>
+    <title>Mi Línea de Tiempo</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        :root { --primary: #6366f1; --accent: #f43f5e; --bg: #0f172a; --text: #f8fafc; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; line-height: 1.6; }
+        :root { --primary: #6366f1; --accent: #f43f5e; --bg: #0f172a; --text: #f8fafc; --line: #475569; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; overflow-x: hidden; }
         
-        header { text-align: center; padding: 40px 0; }
-        h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary); }
+        header { text-align: center; padding: 20px 0; }
+        h1 { font-size: 2rem; color: var(--primary); margin: 0; }
 
-        /* Timeline Horizontal */
-        .timeline-wrapper { margin-bottom: 50px; }
-        .timeline-container {
-            display: flex;
+        /* Contenedor Deslizable del Timeline */
+        .timeline-scroll-wrapper {
+            width: 100%;
             overflow-x: auto;
-            gap: 20px;
-            padding: 20px;
+            padding: 100px 0; /* Espacio para que las cajas no se corten */
+            margin-bottom: 50px;
             scrollbar-width: thin;
             scrollbar-color: var(--primary) transparent;
         }
-        
-        /* Tarjetas */
-        .card {
-            min-width: 280px;
-            max-width: 280px;
+
+        .timeline-track {
+            display: flex;
+            align-items: center;
+            position: relative;
+            min-width: max-content;
+            padding: 0 100px;
+            height: 400px; /* Altura para permitir arriba/abajo */
+        }
+
+        /* La línea central horizontal */
+        .timeline-track::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--line);
+            z-index: 1;
+        }
+
+        /* Nodo individual (Hito) */
+        .hito-node {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 250px;
+            z-index: 2;
+        }
+
+        /* El punto sobre la línea */
+        .dot {
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border: 4px solid var(--bg);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        /* Contenido del hito (Alternancia arriba/abajo) */
+        .hito-content {
+            width: 200px;
             background: #1e293b;
+            padding: 15px;
             border-radius: 15px;
-            overflow: hidden;
-            transition: transform 0.3s ease;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
-            border: 1px solid #334155;
+            text-align: center;
+            position: absolute;
+            border: 2px solid var(--line);
         }
-        .card:hover { transform: translateY(-5px); }
-        .card img { width: 100%; height: 160px; object-fit: cover; }
-        .card-body { padding: 15px; }
-        .date { font-size: 0.85rem; color: var(--primary); font-weight: bold; }
-        .card-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
-        .tag-span { font-size: 0.7rem; background: #334155; padding: 2px 8px; border-radius: 10px; }
-        .hito-label { background: var(--accent); color: white; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; float: right; }
 
-        /* Filtros */
-        .filters { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-        .filter-btn { 
-            background: #1e293b; border: 1px solid var(--primary); color: white; 
-            padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: 0.3s;
+        /* Impares arriba, pares abajo */
+        .hito-node:nth-child(odd) .hito-content { bottom: 40px; }
+        .hito-node:nth-child(even) .hito-content { top: 40px; }
+
+        /* Decoración de la imagen redonda (estilo tu foto) */
+        .hito-img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid var(--primary);
+            object-fit: cover;
+            margin-bottom: 10px;
+            background: #000;
         }
-        .filter-btn.active, .filter-btn:hover { background: var(--primary); }
 
+        .hito-date {
+            background: var(--primary);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+
+        /* Grid inferior para el resto de eventos */
         .grid-eventos {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 25px;
-            max-width: 1200px;
-            margin: 0 auto;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
         }
+        .simple-card { background: #1e293b; padding: 15px; border-radius: 10px; border-left: 4px solid var(--primary); }
 
-        #loading { text-align: center; font-style: italic; color: #94a3b8; }
+        #loading { text-align: center; color: var(--primary); padding: 20px; }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>📅 Mi Línea de Tiempo</h1>
-    <p>Gestionado desde Google Sheets</p>
+    <h1>Mi Línea de Tiempo Personal</h1>
 </header>
 
-<div id="loading">Cargando eventos desde la nube...</div>
+<div id="loading">Conectando con la línea de tiempo...</div>
 
-<section class="timeline-wrapper">
-    <h2 style="margin-left: 20px;">✨ Hitos Destacados</h2>
-    <div id="timeline" class="timeline-container"></div>
-</section>
+<div class="timeline-scroll-wrapper">
+    <div id="timeline-track" class="timeline-track">
+        </div>
+</div>
 
-<hr style="border: 0; border-top: 1px solid #334155; margin: 40px 0;">
-
-<section>
-    <h2 style="text-align: center;">Todos los Eventos</h2>
-    <div id="filters" class="filters"></div>
-    <div id="eventos-lista" class="grid-eventos"></div>
-</section>
+<div id="filters" style="text-align:center; margin-bottom: 20px;"></div>
+<div id="lista-eventos" class="grid-eventos"></div>
 
 <script>
-    // SUSTITUYE ESTA URL POR LA TUYA DE GOOGLE SHEETS (CSV)
+    // PEGA TU URL DE EXCEL AQUÍ
     const URL_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTpTJn4bMc57RzlfFcgChpjdMMtu6KevYx_xnW4l-DCSzXSpgI1aJxb7cq2wdDPll0dE2oA1x0U0y62/pub?output=csv';
 
-    let datosGlobales = [];
-
-    async function fetchData() {
+    async function init() {
         Papa.parse(URL_CSV, {
             download: true,
             header: true,
             complete: function(results) {
                 document.getElementById('loading').style.display = 'none';
-                // Limpiar y formatear datos
-                datosGlobales = results.data.filter(f => f.titulo).map(e => ({
+                const datos = results.data.filter(f => f.titulo).map(e => ({
                     ...e,
                     esHito: e.esHito?.trim().toUpperCase() === 'TRUE',
                     tags: e.tags ? e.tags.split(',').map(t => t.trim().toLowerCase()) : []
                 }));
-                
-                renderFilters();
-                renderContent();
+                render(datos);
             }
         });
     }
 
-    function renderFilters() {
-        const container = document.getElementById('filters');
-        const tagsUnicos = [...new Set(datosGlobales.flatMap(e => e.tags))];
+    function render(eventos) {
+        const track = document.getElementById('timeline-track');
+        const lista = document.getElementById('lista-eventos');
         
-        container.innerHTML = `<button class="filter-btn active" onclick="renderContent('todos', this)">Todos</button>`;
-        tagsUnicos.forEach(tag => {
-            if(tag) container.innerHTML += `<button class="filter-btn" onclick="renderContent('${tag}', this)">#${tag}</button>`;
-        });
-    }
-
-    function renderContent(filtro = 'todos', btn = null) {
-        const timeline = document.getElementById('timeline');
-        const lista = document.getElementById('eventos-lista');
+        // 1. Renderizar Hitos en la línea (Ordenados por fecha)
+        const hitos = eventos.filter(e => e.esHito).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
         
-        // Manejo de botones activos
-        if(btn) {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        }
-
-        timeline.innerHTML = '';
-        lista.innerHTML = '';
-
-        // Renderizar Timeline (Hitos ordenados por fecha)
-        const hitos = datosGlobales.filter(e => e.esHito).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
-        hitos.forEach(ev => timeline.innerHTML += crearCard(ev));
-
-        // Renderizar Lista Filtrada
-        const filtrados = filtro === 'todos' ? datosGlobales : datosGlobales.filter(e => e.tags.includes(filtro));
-        filtrados.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(ev => {
-            lista.innerHTML += crearCard(ev);
-        });
-    }
-
-    function crearCard(ev) {
-        const img = ev.imagen || 'https://via.placeholder.com/300x160/1e293b/f8fafc?text=Sin+Imagen';
-        return `
-            <div class="card">
-                <img src="${img}" alt="${ev.titulo}">
-                <div class="card-body">
-                    <span class="date">${ev.fecha}</span>
-                    ${ev.esHito ? '<span class="hito-label">HITO</span>' : ''}
-                    <h3 style="margin: 10px 0 5px 0;">${ev.titulo}</h3>
-                    <div class="card-tags">
-                        ${ev.tags.map(t => `<span class="tag-span">#${t}</span>`).join('')}
+        hitos.forEach(h => {
+            const img = h.imagen || 'https://via.placeholder.com/100';
+            track.innerHTML += `
+                <div class="hito-node">
+                    <div class="dot"></div>
+                    <div class="hito-content">
+                        <img src="${img}" class="hito-img">
+                        <br>
+                        <span class="hito-date">${h.fecha}</span>
+                        <h4 style="margin:5px 0">${h.titulo}</h4>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        });
+
+        // 2. Renderizar lista inferior simple
+        eventos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(ev => {
+            lista.innerHTML += `
+                <div class="simple-card">
+                    <small style="color:var(--primary)">${ev.fecha}</small>
+                    <h4 style="margin:5px 0">${ev.titulo}</h4>
+                    <small>${ev.tags.join(', ')}</small>
+                </div>
+            `;
+        });
     }
 
-    fetchData();
+    init();
 </script>
-
 </body>
 </html>
