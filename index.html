@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Diario Visual</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        :root { --primary: #6366f1; --accent: #f43f5e; --bg: #0f172a; --text: #f8fafc; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; line-height: 1.6; }
+        
+        header { text-align: center; padding: 40px 0; }
+        h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary); }
+
+        /* Timeline Horizontal */
+        .timeline-wrapper { margin-bottom: 50px; }
+        .timeline-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 20px;
+            padding: 20px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) transparent;
+        }
+        
+        /* Tarjetas */
+        .card {
+            min-width: 280px;
+            max-width: 280px;
+            background: #1e293b;
+            border-radius: 15px;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            border: 1px solid #334155;
+        }
+        .card:hover { transform: translateY(-5px); }
+        .card img { width: 100%; height: 160px; object-fit: cover; }
+        .card-body { padding: 15px; }
+        .date { font-size: 0.85rem; color: var(--primary); font-weight: bold; }
+        .card-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+        .tag-span { font-size: 0.7rem; background: #334155; padding: 2px 8px; border-radius: 10px; }
+        .hito-label { background: var(--accent); color: white; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; float: right; }
+
+        /* Filtros */
+        .filters { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .filter-btn { 
+            background: #1e293b; border: 1px solid var(--primary); color: white; 
+            padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: 0.3s;
+        }
+        .filter-btn.active, .filter-btn:hover { background: var(--primary); }
+
+        .grid-eventos {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #loading { text-align: center; font-style: italic; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>📅 Mi Línea de Tiempo</h1>
+    <p>Gestionado desde Google Sheets</p>
+</header>
+
+<div id="loading">Cargando eventos desde la nube...</div>
+
+<section class="timeline-wrapper">
+    <h2 style="margin-left: 20px;">✨ Hitos Destacados</h2>
+    <div id="timeline" class="timeline-container"></div>
+</section>
+
+<hr style="border: 0; border-top: 1px solid #334155; margin: 40px 0;">
+
+<section>
+    <h2 style="text-align: center;">Todos los Eventos</h2>
+    <div id="filters" class="filters"></div>
+    <div id="eventos-lista" class="grid-eventos"></div>
+</section>
+
+<script>
+    // SUSTITUYE ESTA URL POR LA TUYA DE GOOGLE SHEETS (CSV)
+    const URL_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTpTJn4bMc57RzlfFcgChpjdMMtu6KevYx_xnW4l-DCSzXSpgI1aJxb7cq2wdDPll0dE2oA1x0U0y62/pub?output=csv';
+
+    let datosGlobales = [];
+
+    async function fetchData() {
+        Papa.parse(URL_CSV, {
+            download: true,
+            header: true,
+            complete: function(results) {
+                document.getElementById('loading').style.display = 'none';
+                // Limpiar y formatear datos
+                datosGlobales = results.data.filter(f => f.titulo).map(e => ({
+                    ...e,
+                    esHito: e.esHito?.trim().toUpperCase() === 'TRUE',
+                    tags: e.tags ? e.tags.split(',').map(t => t.trim().toLowerCase()) : []
+                }));
+                
+                renderFilters();
+                renderContent();
+            }
+        });
+    }
+
+    function renderFilters() {
+        const container = document.getElementById('filters');
+        const tagsUnicos = [...new Set(datosGlobales.flatMap(e => e.tags))];
+        
+        container.innerHTML = `<button class="filter-btn active" onclick="renderContent('todos', this)">Todos</button>`;
+        tagsUnicos.forEach(tag => {
+            if(tag) container.innerHTML += `<button class="filter-btn" onclick="renderContent('${tag}', this)">#${tag}</button>`;
+        });
+    }
+
+    function renderContent(filtro = 'todos', btn = null) {
+        const timeline = document.getElementById('timeline');
+        const lista = document.getElementById('eventos-lista');
+        
+        // Manejo de botones activos
+        if(btn) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        timeline.innerHTML = '';
+        lista.innerHTML = '';
+
+        // Renderizar Timeline (Hitos ordenados por fecha)
+        const hitos = datosGlobales.filter(e => e.esHito).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+        hitos.forEach(ev => timeline.innerHTML += crearCard(ev));
+
+        // Renderizar Lista Filtrada
+        const filtrados = filtro === 'todos' ? datosGlobales : datosGlobales.filter(e => e.tags.includes(filtro));
+        filtrados.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(ev => {
+            lista.innerHTML += crearCard(ev);
+        });
+    }
+
+    function crearCard(ev) {
+        const img = ev.imagen || 'https://via.placeholder.com/300x160/1e293b/f8fafc?text=Sin+Imagen';
+        return `
+            <div class="card">
+                <img src="${img}" alt="${ev.titulo}">
+                <div class="card-body">
+                    <span class="date">${ev.fecha}</span>
+                    ${ev.esHito ? '<span class="hito-label">HITO</span>' : ''}
+                    <h3 style="margin: 10px 0 5px 0;">${ev.titulo}</h3>
+                    <div class="card-tags">
+                        ${ev.tags.map(t => `<span class="tag-span">#${t}</span>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    fetchData();
+</script>
+
+</body>
+</html>
